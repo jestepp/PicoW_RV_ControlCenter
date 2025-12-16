@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>RV Home Control</title>
+  <style>
+    :root{--bg:#0b0f14;--card:#101824;--text:#e7eef8;--muted:#9cb2c9;--good:#2bd576;--bad:#ff4d4d;--warn:#ffd24d;--line:#1d2a3a;--btn:#1b2a3d;--btn2:#213449;--shadow:0 10px 30px rgba(0,0,0,.35);--r:18px;--cold:#3aa0ff;--hot:#ff5b5b;}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial;background:radial-gradient(1200px 800px at 20% 0%,#101a2b 0%,var(--bg) 55%);color:var(--text);}
+    header{padding:18px 16px 8px;max-width:1100px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:12px;}
+    .title{display:flex;flex-direction:column;gap:2px;} h1{font-size:18px;margin:0;letter-spacing:.2px;} .sub{margin:0;color:var(--muted);font-size:12px;}
+    .pill{display:inline-flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid var(--line);background:rgba(16,24,36,.6);border-radius:999px;box-shadow:var(--shadow);user-select:none;}
+    .dot{width:10px;height:10px;border-radius:50%;background:var(--warn);box-shadow:0 0 0 3px rgba(255,210,77,.15);}
+    main{max-width:1100px;margin:0 auto;padding:8px 16px 28px;display:grid;grid-template-columns:repeat(12,1fr);gap:12px;}
+    .card{grid-column:span 6;background:linear-gradient(180deg,rgba(16,24,36,.9),rgba(12,18,28,.9));border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:14px;min-height:110px;}
+    .card h2{margin:0 0 10px 0;font-size:14px;color:var(--text);letter-spacing:.2px;display:flex;align-items:center;justify-content:space-between;gap:10px;}
+    .row{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
+    .meta{color:var(--muted);font-size:12px;line-height:1.3;}
+    .btn{border:1px solid var(--line);background:linear-gradient(180deg,var(--btn2),var(--btn));color:var(--text);padding:10px 12px;border-radius:14px;cursor:pointer;font-weight:600;letter-spacing:.15px;min-width:110px;transition:transform .05s ease,filter .2s ease;}
+    .btn:active{transform:translateY(1px)} .btn:hover{filter:brightness(1.06)}
+    .btn.good{border-color:rgba(43,213,118,.35)} .btn.bad{border-color:rgba(255,77,77,.35)} .btn.warn{border-color:rgba(255,210,77,.35)}
+    .toggle{display:flex;align-items:center;gap:10px;} .switch{width:54px;height:30px;border-radius:999px;background:rgba(156,178,201,.18);border:1px solid var(--line);position:relative;cursor:pointer;flex:0 0 auto;}
+    .knob{position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:rgba(231,238,248,.9);transition:left .18s ease,background .18s ease;box-shadow:0 8px 16px rgba(0,0,0,.35);}
+    .switch.on{background:rgba(43,213,118,.18);border-color:rgba(43,213,118,.35)} .switch.on .knob{left:27px;background:rgba(43,213,118,.95)}
+    .awning{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;width:100%;}
+    .wide{grid-column:span 12;} .card.awningCard{grid-column:span 12;}
+    pre{margin:10px 0 0 0;padding:12px;border-radius:14px;border:1px solid var(--line);background:rgba(9,13,20,.55);color:rgba(231,238,248,.92);overflow:auto;font-size:12px;}
+    .thermo{display:grid;grid-template-columns:repeat(12,1fr);gap:12px;align-items:flex-start;}
+    .thermo .tempCol{grid-column:span 4;}
+    .thermo .setCol{grid-column:span 4;}
+    .thermo .modeCol{grid-column:span 4;}
+    .tempLabel{font-size:12px;color:var(--muted);margin-bottom:4px;}
+    .tempValue{font-size:28px;font-weight:800;letter-spacing:.2px;}
+    .tempBar{position:relative;height:14px;border-radius:999px;background:linear-gradient(90deg,var(--cold),#73c6ff,#ffd24d,var(--hot));box-shadow:inset 0 0 0 1px rgba(255,255,255,.06);}
+    .tempMarker{position:absolute;top:-4px;width:4px;height:22px;background:rgba(231,238,248,.9);border-radius:4px;box-shadow:0 6px 16px rgba(0,0,0,.35);}
+    .setControls{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;}
+    .setValue{font-size:22px;font-weight:700;}
+    .modeButtons{display:flex;gap:8px;flex-wrap:wrap;}
+    .modeButtons .btn{min-width:70px;}
+    /* live hold visuals */
+    .btn.holding{filter:brightness(1.10);box-shadow:0 0 0 3px rgba(43,213,118,.12),0 16px 40px rgba(0,0,0,.35);}
+    .btn.holding.bad{box-shadow:0 0 0 3px rgba(255,77,77,.12),0 16px 40px rgba(0,0,0,.35);}
+    .awningStatus{margin-top:10px;padding:10px 12px;border-radius:14px;border:1px solid var(--line);background:rgba(9,13,20,.35);color:var(--muted);display:flex;align-items:center;justify-content:space-between;gap:10px;}
+    .awningBadge{padding:6px 10px;border-radius:999px;border:1px solid var(--line);background:rgba(16,24,36,.55);color:var(--text);font-weight:700;font-size:12px;}
+    .awningBadge.good{border-color:rgba(43,213,118,.35)} .awningBadge.bad{border-color:rgba(255,77,77,.35)} .awningBadge.warn{border-color:rgba(255,210,77,.35)}
+    @media (max-width:900px){.card,.card.awningCard{grid-column:span 12;}}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="title">
+      <h1>RV Home Control</h1>
+      <p class="sub">Pico W · Local</p>
+    </div>
+    <div class="pill">
+      <span class="dot" id="connDot"></span><span id="connText">Connecting...</span>
+      <button class="btn" style="min-width:auto;padding:8px 10px" onclick="refreshState()">Refresh</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="card">
+      <h2>Water Heater <span class="meta" id="heaterMeta">--</span></h2>
+      <div class="row">
+        <div class="toggle">
+          <div class="switch" id="heaterSw" onclick="toggle('heater')"><div class="knob"></div></div>
+          <div><div style="font-weight:700" id="heaterLabel">OFF</div><div class="meta">Piggyback relay</div></div>
+        </div>
+        <button class="btn warn" onclick="toggle('heater')">Toggle</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Water Pump <span class="meta" id="pumpMeta">--</span></h2>
+      <div class="row">
+        <div class="toggle">
+          <div class="switch" id="pumpSw" onclick="toggle('pump')"><div class="knob"></div></div>
+          <div><div style="font-weight:700" id="pumpLabel">OFF</div><div class="meta">Piggyback relay</div></div>
+        </div>
+        <button class="btn warn" onclick="toggle('pump')">Toggle</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Indoor Lights <span class="meta" id="indoorMeta">--</span></h2>
+      <div class="row">
+        <div class="toggle">
+          <div class="switch" id="indoorSw" onclick="toggle('indoor_lights')"><div class="knob"></div></div>
+          <div><div style="font-weight:700" id="indoorLabel">OFF</div><div class="meta">Dedicated output</div></div>
+        </div>
+        <button class="btn warn" onclick="toggle('indoor_lights')">Toggle</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Outdoor Lights <span class="meta" id="outdoorMeta">--</span></h2>
+      <div class="row">
+        <div class="toggle">
+          <div class="switch" id="outdoorSw" onclick="toggle('outdoor_lights')"><div class="knob"></div></div>
+          <div><div style="font-weight:700" id="outdoorLabel">OFF</div><div class="meta">Dedicated output</div></div>
+        </div>
+        <button class="btn warn" onclick="toggle('outdoor_lights')">Toggle</button>
+      </div>
+    </section>
+
+    <section class="card thermoCard">
+      <h2>Furnace / Thermostat <span class="meta" id="furnaceMeta">--</span></h2>
+      <div class="thermo">
+        <div class="tempCol">
+          <div class="tempLabel">Current</div>
+          <div class="tempValue" id="tempValue">--°F</div>
+          <div class="tempBar">
+            <div class="tempMarker" id="tempMarker" style="left:0%"></div>
+          </div>
+        </div>
+        <div class="setCol">
+          <div class="tempLabel">Setpoint</div>
+          <div class="setValue" id="setValue">--°F</div>
+          <div class="setControls">
+            <button class="btn" onclick="changeSet(-1)">-1°F</button>
+            <button class="btn" onclick="changeSet(-0.5)">-0.5°F</button>
+            <button class="btn good" onclick="changeSet(0.5)">+0.5°F</button>
+            <button class="btn good" onclick="changeSet(1)">+1°F</button>
+          </div>
+        </div>
+        <div class="modeCol">
+          <div class="tempLabel">Mode</div>
+          <div class="modeButtons">
+            <button class="btn warn" id="modeAuto" onclick="setMode('auto')">Auto</button>
+            <button class="btn good" id="modeOn" onclick="setMode('on')">On</button>
+            <button class="btn bad" id="modeOff" onclick="setMode('off')">Off</button>
+          </div>
+          <div class="meta" id="furnaceStatus">Status: --</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card awningCard">
+      <h2>Awning Control <span class="meta" id="awningMeta">Hold-to-run</span></h2>
+      <div class="awning">
+        <button class="btn good" id="btnExtend">Extend</button>
+        <button class="btn warn" id="btnStop" onclick="awningStop()">Stop</button>
+        <button class="btn bad" id="btnRetract">Retract</button>
+      </div>
+      <div class="awningStatus">
+        <div><div style="font-weight:700;color:var(--text)">Awning</div><div class="meta" id="awningHint">Press and hold Extend or Retract</div></div>
+        <div class="awningBadge warn" id="awningBadge">STOPPED</div>
+      </div>
+    </section>
+
+    <section class="card wide">
+      <h2>System Status <span class="meta">/api/state</span></h2>
+      <div class="row"><div class="meta">States + temp + MQTT connection.</div><button class="btn" onclick="refreshState()">Refresh Now</button></div>
+      <pre id="statusBox">{}</pre>
+    </section>
+  </main>
+
+  <script>
+    let holding=null, holdTimer=null;
+    const ui={connDot:document.getElementById("connDot"),connText:document.getElementById("connText"),statusBox:document.getElementById("statusBox"),
+    items:{heater:{sw:"heaterSw",label:"heaterLabel"},pump:{sw:"pumpSw",label:"pumpLabel"},indoor_lights:{sw:"indoorSw",label:"indoorLabel"},outdoor_lights:{sw:"outdoorSw",label:"outdoorLabel"}}};
+
+    const btnExtend=document.getElementById("btnExtend");
+    const btnRetract=document.getElementById("btnRetract");
+    const awningBadge=document.getElementById("awningBadge");
+    const awningHint=document.getElementById("awningHint");
+    const tempMarker=document.getElementById("tempMarker");
+    const tempValue=document.getElementById("tempValue");
+    const setValue=document.getElementById("setValue");
+    const furnaceMeta=document.getElementById("furnaceMeta");
+    const furnaceStatus=document.getElementById("furnaceStatus");
+    const modeButtons={auto:document.getElementById("modeAuto"),on:document.getElementById("modeOn"),off:document.getElementById("modeOff")};
+    let lastSetpoint=null;
+
+    function setConn(ok,text){
+      ui.connDot.style.background=ok?"var(--good)":"var(--bad)";
+      ui.connDot.style.boxShadow=ok?"0 0 0 3px rgba(43,213,118,.15)":"0 0 0 3px rgba(255,77,77,.15)";
+      ui.connText.textContent=text;
+    }
+    function setSwitch(id,on){const el=document.getElementById(id); if(el) el.classList.toggle("on",!!on);}
+    function setLabel(id,on){const el=document.getElementById(id); if(el) el.textContent=on?"ON":"OFF";}
+
+    function setAwningUI(mode){
+      btnExtend.classList.remove("holding"); btnRetract.classList.remove("holding","bad");
+      btnExtend.textContent="Extend"; btnRetract.textContent="Retract";
+      if(mode==="extend"){
+        btnExtend.classList.add("holding"); btnExtend.textContent="HOLDING...";
+        awningBadge.className="awningBadge good"; awningBadge.textContent="EXTENDING";
+        awningHint.textContent="Release to stop";
+      }else if(mode==="retract"){
+        btnRetract.classList.add("holding","bad"); btnRetract.textContent="HOLDING...";
+        awningBadge.className="awningBadge bad"; awningBadge.textContent="RETRACTING";
+        awningHint.textContent="Release to stop";
+      }else if(mode==="offline"){
+        awningBadge.className="awningBadge warn"; awningBadge.textContent="OFFLINE";
+        awningHint.textContent="Connection lost (deadman should stop)";
+      }else{
+        awningBadge.className="awningBadge warn"; awningBadge.textContent="STOPPED";
+        awningHint.textContent="Press and hold Extend or Retract";
+      }
+    }
+
+    function clamp(v,min,max){ return Math.min(max, Math.max(min,v)); }
+    function tempToPercent(f){
+      if(isNaN(f)) return 0;
+      return clamp((f-40)/50*100, 0, 100);
+    }
+    function tempToColor(f){
+      const pct = tempToPercent(f)/100;
+      const lerp=(a,b,t)=>Math.round(a+(b-a)*t);
+      const c1=[0x3a,0xa0,0xff], c2=[0xff,0x5b,0x5b];
+      const t=clamp(pct,0,1);
+      const r=lerp(c1[0],c2[0],t), g=lerp(c1[1],c2[1],t), b=lerp(c1[2],c2[2],t);
+      return `rgb(${r},${g},${b})`;
+    }
+    function updateThermo(temp,setpoint,mode,calling){
+      if(isFinite(temp)){
+        tempValue.textContent=`${temp.toFixed(1)}°F`;
+        tempMarker.style.left=`${tempToPercent(temp)}%`;
+        tempMarker.style.background=tempToColor(temp);
+      }else{
+        tempValue.textContent="--°F";
+      }
+      if(isFinite(setpoint)){
+        lastSetpoint=setpoint;
+        setValue.textContent=`${setpoint.toFixed(1)}°F`;
+      }else{
+        setValue.textContent="--°F";
+      }
+      const m=String(mode||"").toUpperCase();
+      furnaceMeta.textContent=m||"--";
+      furnaceStatus.textContent=`Status: ${calling?"ON":"OFF"}`;
+      for(const key of Object.keys(modeButtons)){
+        const btn=modeButtons[key];
+        if(!btn) continue;
+        const active = (key==="auto" && m==="AUTO") || (key==="on" && m==="ON") || (key==="off" && m==="OFF");
+        btn.style.filter=active?"brightness(1.12)":"";
+        btn.style.boxShadow=active?"0 0 0 2px rgba(255,255,255,.08)":"";
+      }
+    }
+
+    async function post(path){
+      const r=await fetch(path,{method:"POST"});
+      if(!r.ok) throw new Error("HTTP "+r.status);
+    }
+    async function setMode(mode){
+      await post(`/api/furnace/mode?mode=${encodeURIComponent(mode)}`);
+      await refreshState();
+    }
+    async function changeSet(delta){
+      const base = isFinite(lastSetpoint) ? lastSetpoint : 68;
+      const next = clamp(base + delta, 45, 85);
+      await post(`/api/furnace/setpoint?f=${encodeURIComponent(next.toFixed(1))}`);
+      lastSetpoint = next;
+      await refreshState();
+    }
+    async function refreshState(){
+      try{
+        const r=await fetch("/api/state",{cache:"no-store"});
+        if(!r.ok) throw new Error("HTTP "+r.status);
+        const data=await r.json();
+        setConn(true,"Connected");
+        ui.statusBox.textContent=JSON.stringify(data,null,2);
+        for(const key of Object.keys(ui.items)){
+          const map=ui.items[key];
+          setSwitch(map.sw, !!data[key]);
+          setLabel(map.label, !!data[key]);
+        }
+        if(!holding && data.awning) setAwningUI(data.awning);
+        updateThermo(parseFloat(data.temp_f), parseFloat(data.setpoint_f), data.furnace_mode, !!data.furnace_call);
+      }catch(e){
+        setConn(false,"Offline");
+        ui.statusBox.textContent="Failed to fetch /api/state\n"+e;
+        if(holding) setAwningUI("offline");
+      }
+    }
+    async function toggle(dev){ await post("/api/toggle/"+encodeURIComponent(dev)); await refreshState(); }
+
+    async function awningHold(action){ await post("/api/awning/"+encodeURIComponent(action)); }
+    async function awningStop(){
+      holding=null;
+      if(holdTimer){clearInterval(holdTimer); holdTimer=null;}
+      try{ await post("/api/awning/stop"); }catch(e){}
+      setAwningUI("stop"); refreshState();
+    }
+    function startHold(action){
+      if(holding===action) return;
+      holding=action; setAwningUI(action);
+      awningHold(action).catch(()=>setAwningUI("offline"));
+      if(holdTimer) clearInterval(holdTimer);
+      holdTimer=setInterval(()=>{awningHold(action).catch(()=>setAwningUI("offline"));},250);
+    }
+    function endHold(){ awningStop(); }
+    function bindHold(btn,action){
+      btn.addEventListener("mousedown",e=>{e.preventDefault();startHold(action);});
+      btn.addEventListener("mouseup",e=>{e.preventDefault();endHold();});
+      btn.addEventListener("mouseleave",e=>{e.preventDefault();endHold();});
+      btn.addEventListener("touchstart",e=>{e.preventDefault();startHold(action);},{passive:false});
+      btn.addEventListener("touchend",e=>{e.preventDefault();endHold();},{passive:false});
+      btn.addEventListener("touchcancel",e=>{e.preventDefault();endHold();},{passive:false});
+    }
+    bindHold(btnExtend,"extend"); bindHold(btnRetract,"retract"); setAwningUI("stop");
+    refreshState(); setInterval(refreshState, 4000);
+  </script>
+</body>
+</html>
