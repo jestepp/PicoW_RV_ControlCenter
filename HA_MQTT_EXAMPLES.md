@@ -42,6 +42,10 @@ Temperature (°F):
 Call-for-heat:
 - rv/pico1/furnace/state payload: ON | OFF
 
+## Indoor temperature
+- rv/pico1/indoor/temp_f payload: 71.3
+- rv/pico1/indoor/temp_status payload: online | missing
+
 ## Tank levels
 Each is 1 (active) / 0 (inactive), retained:
 - rv/pico1/tank/black/one_third

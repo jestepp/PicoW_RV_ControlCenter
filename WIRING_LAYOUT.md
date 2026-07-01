@@ -12,7 +12,10 @@
 - GP8:  Fresh 1/3
 - GP9:  Fresh 2/3
 - GP10: Fresh Full (Board B IN1)
-- GP11–GP17: reserved for more opto inputs
+- GP11: Water heater DSI fault (PC817 OUT, active-low)
+- GP12-GP14: reserved for more opto inputs
+- GP15: Indoor DS18B20 temperature sensor data
+- GP16-GP17: reserved for more opto inputs
 - GP18: Awning EXT relay drive (piggyback COM→EXT)
 - GP19: Awning RET relay drive (piggyback COM→RET)
 - GP20: Furnace CALL relay drive (piggyback thermostat contact closure)
@@ -70,3 +73,9 @@ Relay contact in parallel with thermostat heat-call:
 - 3.3V → 100k fixed resistor → ADC node → NTC 100k → GND
 - ADC node → GP28 (ADC2)
 Optional: 0.01–0.1 µF from ADC node to GND.
+
+## Indoor DS18B20 temperature sensor
+- DS18B20 VDD -> Pico 3V3
+- DS18B20 GND -> Pico GND
+- DS18B20 DQ/Data -> Pico GP15
+- 4.7k resistor between DS18B20 VDD and DQ/Data

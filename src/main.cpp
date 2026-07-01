@@ -3,6 +3,8 @@
 #include <WiFi.h>
 #include <WebServer.h>
 #include <PubSubClient.h>
+#include <OneWire.h>
+#include <DallasTemperature.h>
 #include <cmath>          // logf/isnan
 #include "build_config.h"
 
@@ -27,7 +29,10 @@ static const uint8_t IN_FRESH_FULL  = 10;
 // Water heater DSI fault input (active-low from PC817 output)
 static const uint8_t IN_HEATER_DSI_FAULT = 11;
 
-// Reserved opto inputs: 12-17 (unused here)
+// Reserved opto inputs: 12-14, 16-17 (unused here)
+
+// Indoor DS18B20 temperature sensor
+static const uint8_t PIN_INDOOR_TEMP_ONEWIRE = 15;
 
 // Awning piggyback relay drives
 static const uint8_t OUT_AWNING_EXT = 18;
@@ -59,6 +64,18 @@ static const uint32_t HEATER_RETRY_OFF_MS = 5000UL; // off time before retry
 
 // GP0/GP1 reserved for UART/I2C later
 
+// Indoor DS18B20 temperature sensor
+static const uint8_t INDOOR_TEMP_RESOLUTION_BITS = 12;
+static const uint32_t INDOOR_TEMP_READ_INTERVAL_MS = 5000UL;
+static const uint32_t INDOOR_TEMP_CONVERSION_MS = 800UL;
+OneWire indoorTempWire(PIN_INDOOR_TEMP_ONEWIRE);
+DallasTemperature indoorTempSensors(&indoorTempWire);
+static uint8_t indoorTempSensorCount = 0;
+static bool indoorTempConversionPending = false;
+static uint32_t indoorTempRequestMs = 0;
+static uint32_t indoorTempLastReadMs = 0;
+static float indoorTempF = NAN;
+
 // ===================== Helpers =====================
 static inline void writeOut(uint8_t pin, bool on, bool activeHigh) {
   digitalWrite(pin, (on == activeHigh) ? HIGH : LOW);
@@ -85,6 +102,12 @@ static String topic(const char* suffix) {
 static void mqttPublish(const String& t, const String& payload, bool retain=true) {
   if (!mqtt.connected()) return;
   mqtt.publish(t.c_str(), payload.c_str(), retain);
+}
+
+static void publishIndoorTemp() {
+  if (isnan(indoorTempF)) mqttPublish(topic("indoor/temp_f"), "nan");
+  else mqttPublish(topic("indoor/temp_f"), String(indoorTempF, 1));
+  mqttPublish(topic("indoor/temp_status"), indoorTempSensorCount > 0 ? "online" : "missing");
 }
 
 // ===================== System State =====================
@@ -277,6 +300,55 @@ static void publishHeaterMsg() {
   mqttPublish(topic("heater/message"), heaterStatusMsg);
 }
 
+// ===================== Indoor DS18B20 temperature =====================
+static void setupIndoorTempSensor() {
+  indoorTempSensors.begin();
+  indoorTempSensors.setWaitForConversion(false);
+  indoorTempSensorCount = indoorTempSensors.getDeviceCount();
+
+  Serial.print("Indoor DS18B20 sensors found: ");
+  Serial.println(indoorTempSensorCount);
+
+  if (indoorTempSensorCount > 0) {
+    indoorTempSensors.setResolution(0, INDOOR_TEMP_RESOLUTION_BITS);
+    indoorTempSensors.requestTemperatures();
+    indoorTempConversionPending = true;
+    indoorTempRequestMs = millis();
+  }
+}
+
+static void indoorTempLoop() {
+  uint32_t now = millis();
+
+  if (indoorTempSensorCount == 0) {
+    if (now - indoorTempLastReadMs >= 30000UL) {
+      indoorTempLastReadMs = now;
+      indoorTempSensors.begin();
+      indoorTempSensorCount = indoorTempSensors.getDeviceCount();
+      if (indoorTempSensorCount > 0) {
+        indoorTempSensors.setResolution(0, INDOOR_TEMP_RESOLUTION_BITS);
+      }
+    }
+    indoorTempF = NAN;
+    return;
+  }
+
+  if (!indoorTempConversionPending && now - indoorTempLastReadMs >= INDOOR_TEMP_READ_INTERVAL_MS) {
+    indoorTempSensors.requestTemperatures();
+    indoorTempConversionPending = true;
+    indoorTempRequestMs = now;
+    return;
+  }
+
+  if (indoorTempConversionPending && now - indoorTempRequestMs >= INDOOR_TEMP_CONVERSION_MS) {
+    float c = indoorTempSensors.getTempCByIndex(0);
+    indoorTempF = (c == DEVICE_DISCONNECTED_C) ? NAN : DallasTemperature::toFahrenheit(c);
+    indoorTempLastReadMs = now;
+    indoorTempConversionPending = false;
+    publishIndoorTemp();
+  }
+}
+
 // ===================== Web UI HTML (embedded) =====================
 static const char HOME_HTML[] PROGMEM = R"HTML(
 <!doctype html><html lang="en"><head>
@@ -357,6 +429,10 @@ pre{margin:10px 0 0 0;padding:12px;border-radius:14px;border:1px solid var(--lin
 <div><div style="font-weight:700" id="outdoorLabel">OFF</div><div class="meta">Dedicated output</div></div></div>
 <button class="btn warn" onclick="toggle('outdoor_lights')">Toggle</button></div></section>
 
+<section class="card"><h2>Indoor Temperature <span class="meta" id="indoorTempMeta">DS18B20</span></h2>
+<div class="row"><div><div class="tempValue" id="indoorTempValue">--&deg;F</div><div class="meta">OneWire on GP15</div></div>
+<div class="pillBadge warn" id="indoorTempBadge">UNKNOWN</div></div></section>
+
 <section class="card thermoCard">
 <h2>Furnace / Thermostat <span class="meta" id="furnaceMeta">--</span></h2>
 <div class="thermo">
@@ -431,6 +507,9 @@ const awningBadge=document.getElementById("awningBadge");
 const awningHint=document.getElementById("awningHint");
 const tempMarker=document.getElementById("tempMarker");
 const tempValue=document.getElementById("tempValue");
+const indoorTempValue=document.getElementById("indoorTempValue");
+const indoorTempBadge=document.getElementById("indoorTempBadge");
+const indoorTempMeta=document.getElementById("indoorTempMeta");
 const setValue=document.getElementById("setValue");
 const furnaceMeta=document.getElementById("furnaceMeta");
 const furnaceStatus=document.getElementById("furnaceStatus");
@@ -458,6 +537,15 @@ function setDsiFault(on){
 }
 function setFurnaceWarn(msg){
   if(furnaceWarn) furnaceWarn.textContent = msg || "—";
+}
+function updateIndoorTemp(temp,ok,count){
+  if(indoorTempValue) indoorTempValue.textContent = isFinite(temp) ? `${temp.toFixed(1)}°F` : "--°F";
+  if(indoorTempMeta) indoorTempMeta.textContent = `${count || 0} sensor${count===1 ? "" : "s"}`;
+  if(indoorTempBadge){
+    indoorTempBadge.classList.toggle("good",!!ok);
+    indoorTempBadge.classList.toggle("warn",!ok);
+    indoorTempBadge.textContent = ok ? "ONLINE" : "MISSING";
+  }
 }
 
 function setAwningUI(mode){
@@ -569,6 +657,7 @@ async function refreshState(){
   heaterLockout = !!data.heater_lockout;
   heaterDsi = !!data.heater_dsi_fault;
   setFurnaceWarn(heaterLockout ? (data.heater_msg || "Check LP level!") : "—");
+  updateIndoorTemp(parseFloat(data.indoor_temp_f), !!data.indoor_temp_ok, data.indoor_temp_sensor_count);
   updateThermo(parseFloat(data.temp_f), parseFloat(data.setpoint_f), data.furnace_mode, !!data.furnace_call);
 }catch(e){
   setConn(false,"Offline");
@@ -623,6 +712,10 @@ static void handleState() {
   json += "\"heater_lockout\":" + String(heaterFault.lockout ? "true" : "false") + ",";
   json += "\"heater_msg\":\"" + heaterStatusMsg + "\",";
   json += "\"awning\":\"" + String(awningModeStr(st.awning)) + "\",";
+  json += "\"indoor_temp_ok\":" + String(!isnan(indoorTempF) ? "true" : "false") + ",";
+  if (isnan(indoorTempF)) json += "\"indoor_temp_f\":null,";
+  else json += "\"indoor_temp_f\":" + String(indoorTempF, 1) + ",";
+  json += "\"indoor_temp_sensor_count\":" + String(indoorTempSensorCount) + ",";
   json += "\"furnace_call\":" + String(furnaceCall ? "true" : "false") + ",";
   json += "\"furnace_mode\":\"" + String(furnaceModeStr(furnaceMode)) + "\",";
   if (isnan(lastTempF)) json += "\"temp_f\":null,";
@@ -749,6 +842,7 @@ static void publishCoreStates() {
   mqttPublish(topic("furnace/mode/state"), furnaceModeStr(furnaceMode));
   mqttPublish(topic("furnace/setpoint_f"), String(furnaceSetpointF, 1));
   mqttPublish(topic("furnace/hyst_f"), String(furnaceHysteresisF, 1));
+  publishIndoorTemp();
 }
 
 static void mqttCallback(char* tpc, byte* payload, unsigned int len) {
@@ -871,6 +965,7 @@ void setup() {
 
   // ADC
   analogReadResolution(12);
+  setupIndoorTempSensor();
 
   applyOutputs();
 
@@ -916,6 +1011,7 @@ void loop() {
 
   mqttReconnectIfNeeded();
   mqtt.loop();
+  indoorTempLoop();
 
   // Heater DSI monitoring/retry
   if (st.heater && heaterDsiActive()) {
@@ -955,5 +1051,6 @@ void loop() {
     lastTankMs = millis();
     publishTankStates();
     publishHeaterDsiFault();
+    publishIndoorTemp();
   }
 }

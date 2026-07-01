@@ -17,6 +17,10 @@
 - 100k resistor (1% preferred) for divider
 - Optional 0.01–0.1 µF capacitor to filter ADC noise
 
+## Indoor temperature sensing
+- DS18B20 temperature sensor
+- 4.7k resistor for the OneWire pull-up
+
 ## Protection / Best practice
 - Inline fuse (2–5A) on the 12V feed into the control box
 - Flyback diodes if you drive bare relay coils (relay boards usually include them)
