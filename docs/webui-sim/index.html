@@ -111,6 +111,17 @@
       </div>
     </section>
 
+    <section class="card">
+      <h2>Indoor Temperature <span class="meta" id="indoorTempMeta">DS18B20</span></h2>
+      <div class="row">
+        <div>
+          <div class="tempValue" id="indoorTempValue">--&deg;F</div>
+          <div class="meta">OneWire on GP15</div>
+        </div>
+        <div class="pillBadge warn" id="indoorTempBadge">UNKNOWN</div>
+      </div>
+    </section>
+
     <section class="card thermoCard">
       <h2>Furnace / Thermostat <span class="meta" id="furnaceMeta">--</span></h2>
       <div class="thermo">
@@ -185,6 +196,9 @@
     const awningHint=document.getElementById("awningHint");
     const tempMarker=document.getElementById("tempMarker");
     const tempValue=document.getElementById("tempValue");
+    const indoorTempValue=document.getElementById("indoorTempValue");
+    const indoorTempBadge=document.getElementById("indoorTempBadge");
+    const indoorTempMeta=document.getElementById("indoorTempMeta");
     const setValue=document.getElementById("setValue");
     const furnaceMeta=document.getElementById("furnaceMeta");
     const furnaceStatus=document.getElementById("furnaceStatus");
@@ -200,6 +214,7 @@
       heater:false,pump:false,indoor_lights:false,outdoor_lights:false,
       awning:"stop", furnace_mode:"AUTO", furnace_call:false,
       temp_f:70.0,setpoint_f:68.0,mqtt_connected:true,ip:"192.168.1.123",
+      indoor_temp_f:72.4,indoor_temp_ok:true,indoor_temp_sensor_count:1,
       heater_dsi_fault:true,
       heater_lockout:true,
       heater_msg:"Check LP level!"
@@ -221,6 +236,16 @@
     }
     function setFurnaceWarn(msg){
       if(furnaceWarn) furnaceWarn.textContent = msg || "—";
+    }
+
+    function updateIndoorTemp(temp,ok,count){
+      if(indoorTempValue) indoorTempValue.textContent = isFinite(temp) ? `${temp.toFixed(1)}°F` : "--°F";
+      if(indoorTempMeta) indoorTempMeta.textContent = `${count || 0} sensor${count===1 ? "" : "s"}`;
+      if(indoorTempBadge){
+        indoorTempBadge.classList.toggle("good",!!ok);
+        indoorTempBadge.classList.toggle("warn",!ok);
+        indoorTempBadge.textContent = ok ? "ONLINE" : "MISSING";
+      }
     }
 
     function setAwningUI(mode){
@@ -294,6 +319,7 @@
       setDsiFault(!!state.heater_dsi_fault);
       heaterMsg.textContent = state.heater_msg || "—";
       setFurnaceWarn(state.heater_lockout ? (state.heater_msg || "Check LP level!") : "—");
+      updateIndoorTemp(parseFloat(state.indoor_temp_f), !!state.indoor_temp_ok, state.indoor_temp_sensor_count);
       updateThermo(parseFloat(state.temp_f), parseFloat(state.setpoint_f), state.furnace_mode, !!state.furnace_call);
     }
     function toggle(dev){
@@ -363,6 +389,7 @@
       const target = state.furnace_call ? state.setpoint_f + 1 : state.setpoint_f - 1;
       const drift = (target - state.temp_f) * 0.05;
       state.temp_f = parseFloat((state.temp_f + drift).toFixed(2));
+      state.indoor_temp_f = parseFloat((state.indoor_temp_f + (Math.random() - 0.5) * 0.08).toFixed(2));
       if(state.furnace_mode==="AUTO"){
         if(!state.furnace_call && state.temp_f < state.setpoint_f - 0.8) state.furnace_call=true;
         else if(state.furnace_call && state.temp_f > state.setpoint_f + 0.8) state.furnace_call=false;

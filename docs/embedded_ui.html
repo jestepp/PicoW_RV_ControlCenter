@@ -44,6 +44,9 @@
     .awningStatus{margin-top:10px;padding:10px 12px;border-radius:14px;border:1px solid var(--line);background:rgba(9,13,20,.35);color:var(--muted);display:flex;align-items:center;justify-content:space-between;gap:10px;}
     .awningBadge{padding:6px 10px;border-radius:999px;border:1px solid var(--line);background:rgba(16,24,36,.55);color:var(--text);font-weight:700;font-size:12px;}
     .awningBadge.good{border-color:rgba(43,213,118,.35)} .awningBadge.bad{border-color:rgba(255,77,77,.35)} .awningBadge.warn{border-color:rgba(255,210,77,.35)}
+    .pillBadge{display:inline-flex;align-items:center;gap:6px;padding:8px 10px;border-radius:12px;border:1px solid var(--line);background:rgba(16,24,36,.6);font-weight:700;font-size:12px;}
+    .pillBadge.good{border-color:rgba(43,213,118,.35);color:var(--good);}
+    .pillBadge.warn{border-color:rgba(255,210,77,.35);color:var(--warn);}
     @media (max-width:900px){.card,.card.awningCard{grid-column:span 12;}}
   </style>
 </head>
@@ -101,6 +104,17 @@
           <div><div style="font-weight:700" id="outdoorLabel">OFF</div><div class="meta">Dedicated output</div></div>
         </div>
         <button class="btn warn" onclick="toggle('outdoor_lights')">Toggle</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Indoor Temperature <span class="meta" id="indoorTempMeta">DS18B20</span></h2>
+      <div class="row">
+        <div>
+          <div class="tempValue" id="indoorTempValue">--&deg;F</div>
+          <div class="meta">OneWire on GP15</div>
+        </div>
+        <div class="pillBadge warn" id="indoorTempBadge">UNKNOWN</div>
       </div>
     </section>
 
@@ -167,6 +181,9 @@
     const awningHint=document.getElementById("awningHint");
     const tempMarker=document.getElementById("tempMarker");
     const tempValue=document.getElementById("tempValue");
+    const indoorTempValue=document.getElementById("indoorTempValue");
+    const indoorTempBadge=document.getElementById("indoorTempBadge");
+    const indoorTempMeta=document.getElementById("indoorTempMeta");
     const setValue=document.getElementById("setValue");
     const furnaceMeta=document.getElementById("furnaceMeta");
     const furnaceStatus=document.getElementById("furnaceStatus");
@@ -180,6 +197,15 @@
     }
     function setSwitch(id,on){const el=document.getElementById(id); if(el) el.classList.toggle("on",!!on);}
     function setLabel(id,on){const el=document.getElementById(id); if(el) el.textContent=on?"ON":"OFF";}
+    function updateIndoorTemp(temp,ok,count){
+      if(indoorTempValue) indoorTempValue.textContent = isFinite(temp) ? `${temp.toFixed(1)}°F` : "--°F";
+      if(indoorTempMeta) indoorTempMeta.textContent = `${count || 0} sensor${count===1 ? "" : "s"}`;
+      if(indoorTempBadge){
+        indoorTempBadge.classList.toggle("good",!!ok);
+        indoorTempBadge.classList.toggle("warn",!ok);
+        indoorTempBadge.textContent = ok ? "ONLINE" : "MISSING";
+      }
+    }
 
     function setAwningUI(mode){
       btnExtend.classList.remove("holding"); btnRetract.classList.remove("holding","bad");
@@ -268,6 +294,7 @@
           setLabel(map.label, !!data[key]);
         }
         if(!holding && data.awning) setAwningUI(data.awning);
+        updateIndoorTemp(parseFloat(data.indoor_temp_f), !!data.indoor_temp_ok, data.indoor_temp_sensor_count);
         updateThermo(parseFloat(data.temp_f), parseFloat(data.setpoint_f), data.furnace_mode, !!data.furnace_call);
       }catch(e){
         setConn(false,"Offline");
